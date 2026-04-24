@@ -1,0 +1,84 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'features/auth/auth_provider.dart';
+import 'features/auth/screens/login_screen.dart';
+import 'features/auth/screens/splash_screen.dart';
+import 'features/auth/screens/onboarding_screen.dart';
+import 'features/auth/screens/register_screen.dart';
+import 'home_screen.dart';
+
+void main() {
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => AuthProvider(),
+      child: const DoctorListApp(),
+    ),
+  );
+}
+
+class DoctorListApp extends StatelessWidget {
+  const DoctorListApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Doctor List',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
+      ),
+      home: const AppRouter(),
+    );
+  }
+}
+
+class AppRouter extends StatefulWidget {
+  const AppRouter({super.key});
+
+  @override
+  State<AppRouter> createState() => _AppRouterState();
+}
+
+class _AppRouterState extends State<AppRouter> {
+  bool _showRegister = false;
+  bool? _loggedIn;
+  bool _showSplash = true;
+  bool _showOnboarding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.wait([
+      context.read<AuthProvider>().isLoggedIn(),
+      Future.delayed(const Duration(seconds: 2)),
+    ]).then((results) {
+      setState(() {
+        _loggedIn = results[0] as bool;
+        _showSplash = false;
+        if (!_loggedIn!) _showOnboarding = true;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_showSplash) return const SplashScreen();
+    if (_loggedIn!) return const HomeScreen();
+    if (_showOnboarding) {
+      return OnboardingScreen(
+        onGetStarted: () => setState(() => _showOnboarding = false),
+      );
+    }
+    if (_showRegister) {
+      return RegisterScreen(
+        onRegister: () => setState(() => _loggedIn = true),
+        onLogin: () => setState(() => _showRegister = false),
+      );
+    }
+    return LoginScreen(
+      onLogin: () => setState(() => _loggedIn = true),
+      onRegister: () => setState(() => _showRegister = true),
+    );
+  }
+}
