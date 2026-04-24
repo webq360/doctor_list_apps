@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'core/models/models.dart';
+import 'core/api/api_client.dart';
+import 'features/auth/auth_provider.dart';
+import 'features/auth/screens/profile_edit_screen.dart';
 import 'features/doctors/screens/doctors_screen.dart';
 import 'features/doctors/screens/doctor_detail_screen.dart';
 import 'features/appointments/screens/appointments_screen.dart';
@@ -27,7 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
       const HospitalsScreen(),
       const DoctorsScreen(),
       const AmbulanceScreen(),
-      const AppointmentsScreen(),
+      const MenuPage(),
     ];
 
     return Scaffold(
@@ -36,6 +40,325 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: _BottomNav(
         index: _index,
         onTap: (i) => setState(() => _index = i),
+      ),
+    );
+  }
+}
+
+// ── Menu Page ──
+class MenuPage extends StatefulWidget {
+  const MenuPage({super.key});
+
+  @override
+  State<MenuPage> createState() => _MenuPageState();
+}
+
+class _MenuPageState extends State<MenuPage> {
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfile();
+  }
+
+  Future<void> _fetchProfile() async {
+    try {
+      final res = await ApiClient.dio.get('/users/me');
+      if (mounted) {
+        context.read<AuthProvider>().user = UserModel.fromJson(res.data);
+        setState(() => _loading = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, elevation: 0),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true && mounted) {
+      await context.read<AuthProvider>().logout();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = context.watch<AuthProvider>().user;
+    final name = user?.name ?? 'User';
+    final email = user?.email ?? '';
+    final phone = user?.phone ?? '';
+    final imageUrl = user?.imageUrl;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF2F2F7),
+      body: Column(
+        children: [
+          // ── Header ──
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF4158F5), Color(0xFF2B3EE6)],
+              ),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(28),
+                bottomRight: Radius.circular(28),
+              ),
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                    : Row(
+                        children: [
+                          Container(
+                            width: 64,
+                            height: 64,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withOpacity(0.2),
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            child: ClipOval(
+                              child: imageUrl != null
+                                  ? Image.network(imageUrl, fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) =>
+                                          const Icon(Icons.person, color: Colors.white, size: 36))
+                                  : const Icon(Icons.person, color: Colors.white, size: 36),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(name,
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                                if (email.isNotEmpty)
+                                  Text(email,
+                                      style: TextStyle(
+                                          color: Colors.white.withOpacity(0.8), fontSize: 13)),
+                                if (phone.isNotEmpty)
+                                  Text(phone,
+                                      style: TextStyle(
+                                          color: Colors.white.withOpacity(0.7), fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const ProfileEditScreen()),
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.white.withOpacity(0.4)),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.edit, color: Colors.white, size: 14),
+                                  SizedBox(width: 4),
+                                  Text('Edit', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ),
+
+          // ── Menu Items ──
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                const SizedBox(height: 4),
+                _MenuSection(
+                  title: 'My Activity',
+                  items: [
+                    _MenuItem(
+                      icon: Icons.calendar_today_outlined,
+                      label: 'My Appointments',
+                      color: const Color(0xFF2B3EE6),
+                      onTap: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => const AppointmentsScreen())),
+                    ),
+                    _MenuItem(
+                      icon: Icons.notifications_outlined,
+                      label: 'Notifications',
+                      color: const Color(0xFFFF9500),
+                      onTap: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => const NotificationScreen())),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _MenuSection(
+                  title: 'Services',
+                  items: [
+                    _MenuItem(
+                      icon: Icons.local_hospital_outlined,
+                      label: 'Hospitals',
+                      color: const Color(0xFF34C759),
+                      onTap: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => const HospitalsScreen())),
+                    ),
+                    _MenuItem(
+                      icon: Icons.medical_services_outlined,
+                      label: 'Doctors',
+                      color: const Color(0xFF5856D6),
+                      onTap: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => const DoctorsScreen())),
+                    ),
+                    _MenuItem(
+                      icon: Icons.airport_shuttle_outlined,
+                      label: 'Ambulance',
+                      color: const Color(0xFFFF3B30),
+                      onTap: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => const AmbulanceScreen())),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _MenuSection(
+                  title: 'Account',
+                  items: [
+                    _MenuItem(
+                      icon: Icons.logout_rounded,
+                      label: 'Logout',
+                      color: Colors.red,
+                      onTap: _logout,
+                      isDestructive: true,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MenuSection extends StatelessWidget {
+  final String title;
+  final List<_MenuItem> items;
+  const _MenuSection({required this.title, required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(title,
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF888888),
+                  letterSpacing: 0.5)),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2)),
+            ],
+          ),
+          child: Column(
+            children: List.generate(items.length, (i) {
+              return Column(
+                children: [
+                  items[i],
+                  if (i < items.length - 1)
+                    const Divider(height: 1, indent: 56, endIndent: 16),
+                ],
+              );
+            }),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MenuItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  final bool isDestructive;
+  const _MenuItem({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+    this.isDestructive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: isDestructive ? Colors.red : const Color(0xFF1A1A2E),
+                ),
+              ),
+            ),
+            Icon(Icons.chevron_right,
+                color: isDestructive ? Colors.red.withOpacity(0.4) : const Color(0xFFCCCCCC),
+                size: 20),
+          ],
+        ),
       ),
     );
   }
@@ -645,5 +968,3 @@ class _ServiceTile extends StatelessWidget {
     );
   }
 }
-
-

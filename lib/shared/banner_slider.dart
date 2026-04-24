@@ -14,6 +14,8 @@ class _BannerSliderState extends State<BannerSlider> {
   final PageController _pageCtrl = PageController();
   int _current = 0;
   Timer? _timer;
+  bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -23,12 +25,31 @@ class _BannerSliderState extends State<BannerSlider> {
 
   Future<void> _fetchBanners() async {
     try {
-      final res = await ApiClient.dio.get('/banners');
-      final list = (res.data as List).cast<Map<String, dynamic>>();
+      final res = await ApiClient.dio
+          .get('/banners', queryParameters: {'category': 'home_slider'});
+      final data = res.data;
       if (!mounted) return;
-      setState(() => _banners = list);
+      if (data is! List) {
+        setState(() {
+          _loading = false;
+          _error = 'Invalid response';
+        });
+        return;
+      }
+      final list = data.whereType<Map<String, dynamic>>().toList();
+      setState(() {
+        _banners = list;
+        _loading = false;
+      });
       if (list.length > 1) _startTimer();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('BannerSlider error: $e');
+      if (mounted)
+        setState(() {
+          _loading = false;
+          _error = e.toString();
+        });
+    }
   }
 
   void _startTimer() {
@@ -52,7 +73,32 @@ class _BannerSliderState extends State<BannerSlider> {
 
   @override
   Widget build(BuildContext context) {
-    if (_banners.isEmpty) return const _BannerPlaceholder();
+    if (_loading) return const _BannerPlaceholder();
+    if (_error != null || _banners.isEmpty) {
+      return Container(
+        height: 180,
+        color: const Color(0xFFE8ECFF),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.wifi_off, color: Color(0xFF2B3EE6), size: 32),
+              const SizedBox(height: 8),
+              Text(
+                _error != null ? 'Connection error' : 'No banners',
+                style: const TextStyle(color: Color(0xFF2B3EE6), fontSize: 12),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 4),
+                Text(_error!,
+                    style: const TextStyle(color: Colors.red, fontSize: 10),
+                    textAlign: TextAlign.center),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
 
     return SizedBox(
       height: 180,

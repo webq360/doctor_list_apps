@@ -64,7 +64,14 @@ class _AppRouterState extends State<AppRouter> {
   @override
   Widget build(BuildContext context) {
     if (_showSplash) return const SplashScreen();
-    if (_loggedIn!) return const HomeScreen();
+    final auth = context.watch<AuthProvider>();
+    // Detect logout: user was logged in but now user is null
+    if (_loggedIn == true && auth.user == null && !auth.isLoading) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        setState(() { _loggedIn = false; _showRegister = false; });
+      });
+    }
+    if (_loggedIn == true) return const HomeScreen();
     if (_showOnboarding) {
       return OnboardingScreen(
         onGetStarted: () => setState(() => _showOnboarding = false),

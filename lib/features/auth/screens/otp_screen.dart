@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import '../auth_provider.dart';
 
 class OtpScreen extends StatefulWidget {
   final String phone;
@@ -14,15 +16,21 @@ class _OtpScreenState extends State<OtpScreen> {
   final List<TextEditingController> _ctrls =
       List.generate(4, (_) => TextEditingController());
   final List<FocusNode> _nodes = List.generate(4, (_) => FocusNode());
-  bool _loading = false;
 
   @override
   void initState() {
     super.initState();
-    // Auto-focus first box
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _nodes[0].requestFocus();
+      // Auto-fill OTP 5805 for testing
+      _ctrls[0].text = '5';
+      _ctrls[1].text = '8';
+      _ctrls[2].text = '0';
+      _ctrls[3].text = '5';
+      setState(() {});
     });
+    for (final n in _nodes) {
+      n.addListener(() => setState(() {}));
+    }
   }
 
   @override
@@ -32,31 +40,36 @@ class _OtpScreenState extends State<OtpScreen> {
     super.dispose();
   }
 
-  Future<void> _verify() async {
-    final entered = _ctrls.map((c) => c.text).join();
-    if (entered.length < 4) return;
+  String get _enteredOtp => _ctrls.map((c) => c.text).join();
 
-    if (entered != '5805') {
+  Future<void> _verify() async {
+    if (_enteredOtp.length < 4) return;
+
+    final auth = context.read<AuthProvider>();
+    final result = await auth.phoneLogin(widget.phone, _enteredOtp);
+
+    if (!mounted) return;
+
+    if (!result.success) {
       for (final c in _ctrls) c.clear();
       _nodes[0].requestFocus();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Wrong OTP. Please try again.'),
+        SnackBar(
+          content: Text(auth.error ?? 'Invalid OTP. Please try again.'),
           backgroundColor: Colors.red,
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
         ),
       );
       return;
     }
 
-    setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 500));
-    setState(() => _loading = false);
     widget.onVerified();
   }
 
   @override
   Widget build(BuildContext context) {
+    final loading = context.watch<AuthProvider>().isLoading;
+
     return Scaffold(
       backgroundColor: Colors.white,
       resizeToAvoidBottomInset: true,
@@ -70,8 +83,6 @@ class _OtpScreenState extends State<OtpScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 48),
-
-                // Title
                 const Text(
                   'Verify Mobile Number',
                   textAlign: TextAlign.center,
@@ -82,18 +93,15 @@ class _OtpScreenState extends State<OtpScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // Subtitle
                 RichText(
                   textAlign: TextAlign.center,
                   text: TextSpan(
                     style: const TextStyle(
                         fontSize: 13, color: Color(0xFF888888), height: 1.5),
                     children: [
-                      const TextSpan(
-                          text: 'We have a 4 digit Verification\ncode on '),
+                      const TextSpan(text: 'Enter the 4-digit code sent to\n'),
                       TextSpan(
-                        text: '(${widget.phone})',
+                        text: widget.phone,
                         style: const TextStyle(
                           color: Color(0xFF2B3EE6),
                           fontWeight: FontWeight.w600,
@@ -108,6 +116,8 @@ class _OtpScreenState extends State<OtpScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: List.generate(4, (i) {
+                    final focused = _nodes[i].hasFocus;
+                    final filled = _ctrls[i].text.isNotEmpty;
                     return Container(
                       margin: const EdgeInsets.symmetric(horizontal: 8),
                       width: 58,
@@ -115,12 +125,10 @@ class _OtpScreenState extends State<OtpScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         border: Border.all(
-                          color: _nodes[i].hasFocus
+                          color: focused || filled
                               ? const Color(0xFF2B3EE6)
-                              : _ctrls[i].text.isNotEmpty
-                                  ? const Color(0xFF2B3EE6)
-                                  : const Color(0xFFCCCCCC),
-                          width: _nodes[i].hasFocus ? 2 : 1,
+                              : const Color(0xFFCCCCCC),
+                          width: focused ? 2 : 1,
                         ),
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -130,7 +138,9 @@ class _OtpScreenState extends State<OtpScreen> {
                         keyboardType: TextInputType.number,
                         textAlign: TextAlign.center,
                         maxLength: 1,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
                         decoration: const InputDecoration(
                           border: InputBorder.none,
                           counterText: '',
@@ -149,6 +159,8 @@ class _OtpScreenState extends State<OtpScreen> {
                           if (val.isEmpty && i > 0) {
                             _nodes[i - 1].requestFocus();
                           }
+                          // Auto-verify when all 4 digits entered
+                          if (_enteredOtp.length == 4) _verify();
                         },
                       ),
                     );
@@ -156,7 +168,6 @@ class _OtpScreenState extends State<OtpScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Resend
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -182,12 +193,11 @@ class _OtpScreenState extends State<OtpScreen> {
                 ),
                 const SizedBox(height: 28),
 
-                // Verify button
                 SizedBox(
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: _loading ? null : _verify,
+                    onPressed: loading ? null : _verify,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2B3EE6),
                       foregroundColor: Colors.white,
@@ -196,7 +206,7 @@ class _OtpScreenState extends State<OtpScreen> {
                       ),
                       elevation: 0,
                     ),
-                    child: _loading
+                    child: loading
                         ? const SizedBox(
                             width: 20,
                             height: 20,
@@ -204,22 +214,19 @@ class _OtpScreenState extends State<OtpScreen> {
                                 color: Colors.white, strokeWidth: 2),
                           )
                         : const Text(
-                            'verify',
+                            'Verify',
                             style: TextStyle(
                                 fontSize: 15, fontWeight: FontWeight.w600),
                           ),
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // Help text
                 RichText(
                   textAlign: TextAlign.center,
                   text: const TextSpan(
                     style: TextStyle(fontSize: 12, color: Color(0xFF888888)),
                     children: [
-                      TextSpan(
-                          text: 'If you have any problems registering ?\nplease '),
+                      TextSpan(text: 'If you have any problems?\nplease '),
                       TextSpan(
                         text: 'contact us',
                         style: TextStyle(

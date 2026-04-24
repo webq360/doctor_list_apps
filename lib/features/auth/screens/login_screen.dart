@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'otp_screen.dart';
-import '../../../home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final VoidCallback onLogin;
@@ -15,7 +14,12 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _phoneCtrl = TextEditingController();
   final _focusNode = FocusNode();
-  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() => setState(() {}));
+  }
 
   @override
   void dispose() {
@@ -24,25 +28,15 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _getCode() async {
+  void _getCode() {
     if (_phoneCtrl.text.length < 10) return;
     _focusNode.unfocus();
-    setState(() => _loading = true);
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() => _loading = false);
-    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => OtpScreen(
           phone: _phoneCtrl.text.trim(),
-          onVerified: () {
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(builder: (_) => const HomeScreen()),
-              (route) => false,
-            );
-          },
+          onVerified: widget.onLogin,
         ),
       ),
     );
@@ -51,6 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final hasPhone = _phoneCtrl.text.length >= 10;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -58,15 +53,12 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // ── Blue header ──
             _BlueHeader(height: size.height * 0.30),
-
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Phone Number label
                   const Text(
                     'Phone Number',
                     style: TextStyle(
@@ -76,95 +68,83 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-
-                  // Phone input field
-                  GestureDetector(
-                    onTap: () => _focusNode.requestFocus(),
-                    child: Container(
-                      height: 50,
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: _focusNode.hasFocus
-                              ? const Color(0xFF2B3EE6)
-                              : const Color(0xFFDDDDDD),
+                  Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: _focusNode.hasFocus
+                            ? const Color(0xFF2B3EE6)
+                            : const Color(0xFFDDDDDD),
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      color: Colors.white,
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+                        const Text('🇧🇩', style: TextStyle(fontSize: 20)),
+                        const SizedBox(width: 8),
+                        const Text(
+                          '+880',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF333333),
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                        borderRadius: BorderRadius.circular(10),
-                        color: Colors.white,
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Row(
-                        children: [
-                          const Text('🇧🇩', style: TextStyle(fontSize: 20)),
-                          const SizedBox(width: 8),
-                          const Text(
-                            '+880',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Color(0xFF333333),
-                              fontWeight: FontWeight.w500,
+                        const SizedBox(width: 8),
+                        Container(width: 1, height: 22, color: const Color(0xFFDDDDDD)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: _phoneCtrl,
+                            focusNode: _focusNode,
+                            keyboardType: TextInputType.phone,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(11),
+                            ],
+                            decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: EdgeInsets.zero,
+                              hintText: '017XXXXXXXX',
+                              hintStyle: TextStyle(color: Color(0xFFCCCCCC), fontSize: 14),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(width: 1, height: 22, color: const Color(0xFFDDDDDD)),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: TextField(
-                              controller: _phoneCtrl,
-                              focusNode: _focusNode,
-                              keyboardType: TextInputType.phone,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                                LengthLimitingTextInputFormatter(11),
-                              ],
-                              decoration: const InputDecoration(
-                                border: InputBorder.none,
-                                isDense: true,
-                                contentPadding: EdgeInsets.zero,
-                                hintText: '017XXXXXXXX',
-                                hintStyle: TextStyle(color: Color(0xFFCCCCCC), fontSize: 14),
-                              ),
-                              style: const TextStyle(
-                                fontSize: 15,
-                                color: Color(0xFF222222),
-                                letterSpacing: 1,
-                              ),
-                              onChanged: (_) => setState(() {}),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              color: Color(0xFF222222),
+                              letterSpacing: 1,
                             ),
+                            onChanged: (_) => setState(() {}),
+                            onSubmitted: (_) => _getCode(),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-
                   const SizedBox(height: 16),
-
-                  // Get Code button
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      onPressed: _loading ? null : _getCode,
+                      onPressed: hasPhone ? _getCode : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF2B3EE6),
+                        disabledBackgroundColor: const Color(0xFFB0B8F8),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                         elevation: 0,
                       ),
-                      child: _loading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                            )
-                          : const Text('Login', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                      child: const Text(
+                        'Get OTP',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ),
-
                   const SizedBox(height: 14),
-
-                  // Terms
                   Center(
                     child: RichText(
                       textAlign: TextAlign.center,
@@ -180,7 +160,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           TextSpan(text: ' and\n'),
                           TextSpan(
-                            text: 'privacy Policy',
+                            text: 'Privacy Policy',
                             style: TextStyle(color: Color(0xFF2B3EE6), fontWeight: FontWeight.w600),
                           ),
                         ],
@@ -197,7 +177,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// ── Blue header with wave ──
 class _BlueHeader extends StatelessWidget {
   final double height;
   const _BlueHeader({required this.height});
@@ -227,7 +206,7 @@ class _BlueHeader extends StatelessWidget {
             left: 0,
             right: 0,
             child: CustomPaint(
-              size: Size(double.infinity, 40),
+              size: const Size(double.infinity, 40),
               painter: _WavePainter(),
             ),
           ),
