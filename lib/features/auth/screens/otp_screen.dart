@@ -16,21 +16,23 @@ class _OtpScreenState extends State<OtpScreen> {
   final List<TextEditingController> _ctrls =
       List.generate(4, (_) => TextEditingController());
   final List<FocusNode> _nodes = List.generate(4, (_) => FocusNode());
+  bool _verifying = false;
 
   @override
   void initState() {
     super.initState();
+    for (final n in _nodes) {
+      n.addListener(() => setState(() {}));
+    }
+    // Auto-fill OTP 5805 and verify
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Auto-fill OTP 5805 for testing
       _ctrls[0].text = '5';
       _ctrls[1].text = '8';
       _ctrls[2].text = '0';
       _ctrls[3].text = '5';
       setState(() {});
+      _verify();
     });
-    for (final n in _nodes) {
-      n.addListener(() => setState(() {}));
-    }
   }
 
   @override
@@ -44,6 +46,8 @@ class _OtpScreenState extends State<OtpScreen> {
 
   Future<void> _verify() async {
     if (_enteredOtp.length < 4) return;
+    if (_verifying) return; // prevent double call
+    _verifying = true;
 
     final auth = context.read<AuthProvider>();
     final result = await auth.phoneLogin(widget.phone, _enteredOtp);
@@ -51,19 +55,23 @@ class _OtpScreenState extends State<OtpScreen> {
     if (!mounted) return;
 
     if (!result.success) {
+      _verifying = false;
       for (final c in _ctrls) c.clear();
       _nodes[0].requestFocus();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(auth.error ?? 'Invalid OTP. Please try again.'),
           backgroundColor: Colors.red,
-          duration: const Duration(seconds: 2),
+          duration: const Duration(seconds: 3),
         ),
       );
       return;
     }
 
     widget.onVerified();
+    if (mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
   }
 
   @override
@@ -159,8 +167,8 @@ class _OtpScreenState extends State<OtpScreen> {
                           if (val.isEmpty && i > 0) {
                             _nodes[i - 1].requestFocus();
                           }
-                          // Auto-verify when all 4 digits entered
-                          if (_enteredOtp.length == 4) _verify();
+                          // Auto-verify when all 4 digits entered manually
+                          if (_enteredOtp.length == 4 && !_verifying) _verify();
                         },
                       ),
                     );

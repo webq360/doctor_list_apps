@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/api/api_client.dart';
 import '../../../core/models/models.dart';
 import '../../../core/utils/bd_location_data.dart';
 import 'doctor_detail_screen.dart';
@@ -15,33 +16,6 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
   bool _loading = false;
   String? _error;
 
-  static const _dummyDoctors = [
-    (
-      '1', 'Dr. Arif Hossain', 'Cardiologist', 12, 800.0,
-      'Specialist in heart diseases with 12 years of experience at DMCH.',
-      'Dhaka', 4.8, 124, 'Dhaka Medical College Hospital',
-    ),
-    (
-      '2', 'Dr. Nusrat Jahan', 'Gynecologist', 8, 600.0,
-      'Expert in women health and maternity care. Visiting at Popular Hospital.',
-      'Chittagong', 4.6, 98, 'Popular Medical Centre',
-    ),
-    (
-      '3', 'Dr. Rakibul Islam', 'Neurologist', 15, 1000.0,
-      'Senior neurologist with expertise in stroke and epilepsy management.',
-      'Dhaka', 4.9, 210, 'National Institute of Neurosciences',
-    ),
-    (
-      '4', 'Dr. Sumaiya Akter', 'Dermatologist', 6, 500.0,
-      'Skin specialist treating acne, eczema and cosmetic skin conditions.',
-      'Sylhet', 4.5, 76, 'Sylhet MAG Osmani Medical College',
-    ),
-    (
-      '5', 'Dr. Mahbub Alam', 'Orthopedic', 10, 750.0,
-      'Bone and joint specialist. Experienced in sports injury and fracture care.',
-      'Rajshahi', 4.7, 155, 'Rajshahi Medical College Hospital',
-    ),
-  ];
   final _nameCtrl = TextEditingController();
   final _deptCtrl = TextEditingController();
   String? _division;
@@ -51,25 +25,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadDummy();
-  }
-
-  void _loadDummy() {
-    _doctors = _dummyDoctors
-        .map((d) => DoctorModel(
-              id: d.$1,
-              name: d.$2,
-              specialization: d.$3,
-              experience: d.$4,
-              fees: d.$5,
-              bio: d.$6,
-              isApproved: true,
-              location: d.$7,
-              rating: d.$8,
-              ratingCount: d.$9,
-              hospital: d.$10,
-            ))
-        .toList();
+    _fetchDoctors();
   }
 
   @override
@@ -79,24 +35,32 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
     super.dispose();
   }
 
+  Future<void> _fetchDoctors({String? name, String? specialization, String? division, String? district, String? upazila}) async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final params = <String, dynamic>{};
+      if (name != null && name.isNotEmpty) params['name'] = name;
+      if (specialization != null && specialization.isNotEmpty) params['specialization'] = specialization;
+      if (division != null && division.isNotEmpty) params['division'] = division;
+      if (district != null && district.isNotEmpty) params['district'] = district;
+      if (upazila != null && upazila.isNotEmpty) params['upazila'] = upazila;
+
+      final res = await ApiClient.dio.get('/doctors', queryParameters: params.isNotEmpty ? params : null);
+      final list = (res.data as List).map((d) => DoctorModel.fromJson(d as Map<String, dynamic>)).toList();
+      if (mounted) setState(() { _doctors = list; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = 'Failed to load doctors'; _loading = false; });
+    }
+  }
+
   void _search() {
-    final name = _nameCtrl.text.trim().toLowerCase();
-    final dept = _deptCtrl.text.trim().toLowerCase();
-    final loc = _upazila ?? _district ?? _division;
-    setState(() {
-      _doctors = _dummyDoctors
-          .where((d) =>
-              (name.isEmpty || d.$2.toLowerCase().contains(name)) &&
-              (dept.isEmpty || d.$3.toLowerCase().contains(dept)) &&
-              (loc == null || d.$7.toLowerCase().contains(loc.toLowerCase())))
-          .map((d) => DoctorModel(
-                id: d.$1, name: d.$2, specialization: d.$3,
-                experience: d.$4, fees: d.$5, bio: d.$6,
-                isApproved: true, location: d.$7, rating: d.$8, ratingCount: d.$9,
-                hospital: d.$10,
-              ))
-          .toList();
-    });
+    _fetchDoctors(
+      name: _nameCtrl.text.trim(),
+      specialization: _deptCtrl.text.trim(),
+      division: _division,
+      district: _district,
+      upazila: _upazila,
+    );
   }
 
   void _openLocationPicker() async {
@@ -116,6 +80,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
         _district = result['district'];
         _upazila = result['upazila'];
       });
+      _search();
     }
   }
 
@@ -141,8 +106,8 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
               children: [
                 const Text('Doctor List',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
-                Text('More',
-                    style: const TextStyle(fontSize: 13, color: Color(0xFF2B3EE6), fontWeight: FontWeight.w500)),
+                Text('${_doctors.length} found',
+                    style: const TextStyle(fontSize: 13, color: Color(0xFF888888), fontWeight: FontWeight.w500)),
               ],
             ),
           ),
@@ -150,16 +115,28 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _error != null
-                    ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_error!, style: const TextStyle(color: Colors.red)),
+                            const SizedBox(height: 12),
+                            ElevatedButton(onPressed: _fetchDoctors, child: const Text('Retry')),
+                          ],
+                        ),
+                      )
                     : _doctors.isEmpty
                         ? const Center(child: Text('No doctors found'))
-                        : ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                            itemCount: _doctors.length,
-                            itemBuilder: (_, i) => _DoctorCard(
-                              doctor: _doctors[i],
-                              onTap: () => Navigator.push(context,
-                                  MaterialPageRoute(builder: (_) => DoctorDetailScreen(doctor: _doctors[i]))),
+                        : RefreshIndicator(
+                            onRefresh: _fetchDoctors,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              itemCount: _doctors.length,
+                              itemBuilder: (_, i) => _DoctorCard(
+                                doctor: _doctors[i],
+                                onTap: () => Navigator.push(context,
+                                    MaterialPageRoute(builder: (_) => DoctorDetailScreen(doctor: _doctors[i]))),
+                              ),
                             ),
                           ),
           ),
@@ -318,7 +295,6 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-
 class _DoctorCard extends StatelessWidget {
   final DoctorModel doctor;
   final VoidCallback onTap;
@@ -334,17 +310,15 @@ class _DoctorCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top: avatar + name + specialty + location + short bio
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Avatar
               Container(
                 width: 64,
                 height: 64,
@@ -361,7 +335,6 @@ class _DoctorCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              // Name + specialty + location + bio
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -369,8 +342,10 @@ class _DoctorCard extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(doctor.name,
-                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
+                        Expanded(
+                          child: Text(doctor.name,
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
+                        ),
                         if (doctor.location.isNotEmpty)
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -383,7 +358,7 @@ class _DoctorCard extends StatelessWidget {
                               children: [
                                 const Icon(Icons.location_on_outlined, size: 11, color: Color(0xFF2B3EE6)),
                                 const SizedBox(width: 3),
-                                Text(doctor.location,
+                                Text(doctor.location.split(',').first,
                                     style: const TextStyle(fontSize: 11, color: Color(0xFF2B3EE6))),
                               ],
                             ),
@@ -398,7 +373,6 @@ class _DoctorCard extends StatelessWidget {
                       Text(doctor.hospital!,
                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
                     ],
-
                   ],
                 ),
               ),
@@ -406,27 +380,24 @@ class _DoctorCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            doctor.bio.isNotEmpty
-                ? doctor.bio
-                : '8 year experience" refers to a significant amount of professional work in a specific field, suggesting a candidate has a strong track record of skills and knowledge. For someone with this level of experience',
+            doctor.bio.isNotEmpty ? doctor.bio : 'Experienced healthcare professional.',
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 12, color: Color(0xFF555555), height: 1.5),
           ),
           const SizedBox(height: 10),
-          // Rating + experience + fee row
           Row(
             children: [
               const Icon(Icons.star, size: 15, color: Color(0xFFFFC107)),
               const SizedBox(width: 3),
               Text(
-                '${doctor.rating > 0 ? doctor.rating.toStringAsFixed(1) : "4.5"} (${doctor.ratingCount > 0 ? doctor.ratingCount : 7})',
+                '${doctor.rating > 0 ? doctor.rating.toStringAsFixed(1) : "N/A"} (${doctor.ratingCount})',
                 style: const TextStyle(fontSize: 12, color: Color(0xFF1A1A2E), fontWeight: FontWeight.w500),
               ),
               const SizedBox(width: 14),
               const Icon(Icons.people_outline, size: 15, color: Color(0xFF888888)),
               const SizedBox(width: 4),
-              Text('${doctor.experience} year experience',
+              Text('${doctor.experience} yr exp',
                   style: const TextStyle(fontSize: 12, color: Color(0xFF555555))),
               const Spacer(),
               Text('Fee ${doctor.fees.toInt()}/-',
@@ -434,7 +405,6 @@ class _DoctorCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          // Buttons
           Row(
             children: [
               Expanded(
@@ -461,7 +431,7 @@ class _DoctorCard extends StatelessWidget {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                   ),
-                  child: const Text('appointment',
+                  child: const Text('Appointment',
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                 ),
               ),
@@ -493,8 +463,6 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
   String? _division;
   String? _district;
   String? _upazila;
-
-  // 0 = Division, 1 = District, 2 = Upazila
   int _step = 0;
 
   @override
@@ -503,8 +471,11 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
     _division = widget.initialDivision;
     _district = widget.initialDistrict;
     _upazila = widget.initialUpazila;
-    if (_division != null && _district != null) _step = 2;
-    else if (_division != null) _step = 1;
+    if (_division != null && _district != null) {
+      _step = 2;
+    } else if (_division != null) {
+      _step = 1;
+    }
   }
 
   List<String> get _currentItems {
@@ -531,8 +502,11 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
   }
 
   void _goBack() {
-    if (_step == 1) setState(() { _step = 0; _division = null; });
-    else if (_step == 2) setState(() { _step = 1; _district = null; });
+    if (_step == 1) {
+      setState(() { _step = 0; _division = null; });
+    } else if (_step == 2) {
+      setState(() { _step = 1; _district = null; });
+    }
   }
 
   @override
@@ -545,13 +519,11 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
       ),
       child: Column(
         children: [
-          // Handle
           Container(
             margin: const EdgeInsets.only(top: 10),
             width: 40, height: 4,
             decoration: BoxDecoration(color: const Color(0xFFDDDDDD), borderRadius: BorderRadius.circular(2)),
           ),
-          // Header
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
             child: Row(
@@ -565,7 +537,6 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                 Text(_stepTitle,
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
                 const Spacer(),
-                // Breadcrumb
                 if (_division != null)
                   Text(
                     _district != null ? '$_division › $_district' : _division!,
@@ -576,7 +547,6 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
           ),
           const SizedBox(height: 8),
           const Divider(height: 1),
-          // List
           Expanded(
             child: ListView.builder(
               itemCount: _currentItems.length,
@@ -603,7 +573,6 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
               },
             ),
           ),
-          // Clear button
           Padding(
             padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(context).padding.bottom + 12),
             child: TextButton(

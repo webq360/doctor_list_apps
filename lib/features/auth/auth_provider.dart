@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/api/api_client.dart';
@@ -22,8 +23,11 @@ class AuthProvider extends ChangeNotifier {
       await _storage.write(key: 'token', value: res.data['token']);
       user = UserModel.fromJson(res.data['user']);
       return (success: true, isNew: res.data['isNew'] as bool);
+    } on DioException catch (e) {
+      error = e.response?.data?['message'] ?? 'Connection failed. Check your internet.';
+      return (success: false, isNew: false);
     } catch (e) {
-      error = 'Invalid OTP';
+      error = 'Something went wrong';
       return (success: false, isNew: false);
     } finally {
       isLoading = false;

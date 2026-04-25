@@ -64,7 +64,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(color: _statusColor(a.status).withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                              decoration: BoxDecoration(color: _statusColor(a.status).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
                               child: Text(a.status, style: TextStyle(color: _statusColor(a.status), fontSize: 12)),
                             ),
                             if (a.status == 'pending')

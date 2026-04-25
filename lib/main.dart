@@ -5,6 +5,7 @@ import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/splash_screen.dart';
 import 'features/auth/screens/onboarding_screen.dart';
 import 'features/auth/screens/register_screen.dart';
+import 'features/ambulance/screens/ambulance_user_home_screen.dart';
 import 'home_screen.dart';
 
 void main() {
@@ -71,7 +72,11 @@ class _AppRouterState extends State<AppRouter> {
         setState(() { _loggedIn = false; _showRegister = false; });
       });
     }
-    if (_loggedIn == true) return const HomeScreen();
+    if (_loggedIn == true) {
+      final role = context.watch<AuthProvider>().user?.role;
+      if (role == 'ambulance_user') return const AmbulanceUserHomeScreen();
+      return const HomeScreen();
+    }
     if (_showOnboarding) {
       return OnboardingScreen(
         onGetStarted: () => setState(() => _showOnboarding = false),

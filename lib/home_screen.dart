@@ -452,31 +452,9 @@ class _HomePage extends StatelessWidget {
           const SizedBox(height: 10),
           const _TopDoctorsList(),
           const SizedBox(height: 20),
-
-          // ── Physiotherapy Center ──
-          const _SectionTitle(title: 'Physiotherapy Center', actionLabel: 'View All'),
+          const _SectionTitle(title: 'Hospitals', actionLabel: 'View All'),
           const SizedBox(height: 10),
-          const _ServiceList(
-            items: [
-              ('Rehab Center', 'Ora; Health Specialty', false),
-              ('Agrani Sani', 'Ora; Health Specialty', false),
-              ('Agrani Sani', 'Ora; Health Specialty', false),
-            ],
-            isAmbulance: false,
-          ),
-          const SizedBox(height: 20),
-
-          // ── Top Rate Ambulance ──
-          const _SectionTitle(title: 'Top Rate Ambulance', actionLabel: 'View All'),
-          const SizedBox(height: 10),
-          const _ServiceList(
-            items: [
-              ('Mohsin', 'Ora; Health Specialty', true),
-              ('Sani', 'Ora; Health Specialty', true),
-              ('Nazmul', 'Ora; Health Specialty', true),
-            ],
-            isAmbulance: true,
-          ),
+          const _TopHospitalsList(),
           const SizedBox(height: 28),
         ],
       ),
@@ -490,6 +468,10 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = context.watch<AuthProvider>().user;
+    final name = user?.name ?? 'Welcome';
+    final imageUrl = user?.imageUrl;
+
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -520,23 +502,32 @@ class _Header extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Top bar: avatar + greeting + notification
                   Row(
                     children: [
-                      Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                          color: Colors.white24,
+                      GestureDetector(
+                        onTap: () => Navigator.push(context,
+                            MaterialPageRoute(builder: (_) => const ProfileEditScreen())),
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                            color: Colors.white24,
+                          ),
+                          child: ClipOval(
+                            child: imageUrl != null
+                                ? Image.network(imageUrl, fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        const Icon(Icons.person, color: Colors.white, size: 22))
+                                : const Icon(Icons.person, color: Colors.white, size: 22),
+                          ),
                         ),
-                        child: const Icon(Icons.person, color: Colors.white, size: 22),
                       ),
                       const SizedBox(width: 10),
-                      const Text(
-                        'Hi, Name',
-                        style: TextStyle(
+                      Text(
+                        'Hi, $name',
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -552,7 +543,7 @@ class _Header extends StatelessWidget {
                           width: 38,
                           height: 38,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
+                            color: Colors.white.withValues(alpha: 0.15),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
@@ -561,7 +552,6 @@ class _Header extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  // Banner inside white card
                   ClipRRect(
                     borderRadius: BorderRadius.circular(18),
                     child: const BannerSlider(),
@@ -769,17 +759,47 @@ class _AmbulanceCard extends StatelessWidget {
 }
 
 // ── Top Doctors List ──
-class _TopDoctorsList extends StatelessWidget {
+class _TopDoctorsList extends StatefulWidget {
   const _TopDoctorsList();
 
-  static final _doctors = [
-    DoctorModel(id: '1', name: 'Dr. Arif Hossain', specialization: 'Cardiologist', experience: 12, fees: 800, bio: 'Specialist in heart diseases.', isApproved: true, location: 'Dhaka', rating: 4.8, ratingCount: 124, hospital: 'Dhaka Medical College Hospital'),
-    DoctorModel(id: '2', name: 'Dr. Nusrat Jahan', specialization: 'Gynecologist', experience: 8, fees: 600, bio: 'Expert in women health and maternity care.', isApproved: true, location: 'Chittagong', rating: 4.6, ratingCount: 98, hospital: 'Popular Medical Centre'),
-    DoctorModel(id: '3', name: 'Dr. Rakibul Islam', specialization: 'Neurologist', experience: 15, fees: 1000, bio: 'Senior neurologist with expertise in stroke.', isApproved: true, location: 'Dhaka', rating: 4.9, ratingCount: 210, hospital: 'National Institute of Neurosciences'),
-  ];
+  @override
+  State<_TopDoctorsList> createState() => _TopDoctorsListState();
+}
+
+class _TopDoctorsListState extends State<_TopDoctorsList> {
+  List<DoctorModel> _doctors = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  Future<void> _fetch() async {
+    try {
+      final res = await ApiClient.dio.get('/doctors', queryParameters: {'limit': '5'});
+      final list = (res.data as List).map((d) => DoctorModel.fromJson(d as Map<String, dynamic>)).toList();
+      if (mounted) setState(() { _doctors = list.take(5).toList(); _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_doctors.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Center(child: Text('No doctors available', style: TextStyle(color: Color(0xFFAAAAAA)))),
+      );
+    }
     return Column(
       children: _doctors.map((d) => _DoctorTile(
         doctor: d,
@@ -799,171 +819,150 @@ class _DoctorTile extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 6,
-              offset: const Offset(0, 2))
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFFFFE0CC),
-              border: Border.all(color: const Color(0xFFFFB347), width: 1.5),
-            ),
-            child: const Icon(Icons.person, color: Color(0xFFFF8C42), size: 26),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(doctor.name,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
-                Text(doctor.specialization,
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF888888))),
-                if (doctor.hospital != null)
-                  Text(doctor.hospital!,
-                      style: const TextStyle(fontSize: 11, color: Color(0xFF2B3EE6))),
-              ],
-            ),
-          ),
-          const Icon(Icons.chevron_right, color: Color(0xFFAAAAAA), size: 20),
-        ],
-      ),
-      ),
-    );
-  }
-}
-
-// ── Service List (Physiotherapy + Ambulance) ──
-class _ServiceList extends StatelessWidget {
-  final List<(String, String, bool)> items;
-  final bool isAmbulance;
-  const _ServiceList({required this.items, required this.isAmbulance});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: items
-          .map((item) => _ServiceTile(
-                name: item.$1,
-                specialty: item.$2,
-                isAmbulance: isAmbulance,
-              ))
-          .toList(),
-    );
-  }
-}
-
-class _ServiceTile extends StatelessWidget {
-  final String name;
-  final String specialty;
-  final bool isAmbulance;
-  const _ServiceTile(
-      {required this.name,
-      required this.specialty,
-      required this.isAmbulance});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 6,
-              offset: const Offset(0, 2))
-        ],
-      ),
-      child: Row(
-        children: [
-          // Thumbnail
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Image.asset(
-              isAmbulance
-                  ? 'assets/images/ambulance.png'
-                  : 'assets/images/hospital.png',
-              width: 52,
-              height: 52,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  color: isAmbulance
-                      ? const Color(0xFFFFEEE8)
-                      : const Color(0xFFE8F5E9),
-                ),
-                child: Icon(
-                  isAmbulance ? Icons.airport_shuttle : Icons.local_hospital,
-                  color: isAmbulance
-                      ? const Color(0xFFFF6B35)
-                      : const Color(0xFF4CAF50),
-                  size: 28,
-                ),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6, offset: const Offset(0, 2))
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFFFE0CC),
+                border: Border.all(color: const Color(0xFFFFB347), width: 1.5),
+              ),
+              child: ClipOval(
+                child: doctor.imageUrl != null
+                    ? Image.network(doctor.imageUrl!, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            const Icon(Icons.person, color: Color(0xFFFF8C42), size: 26))
+                    : const Icon(Icons.person, color: Color(0xFFFF8C42), size: 26),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name,
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1A1A2E))),
-                Text(specialty,
-                    style: const TextStyle(
-                        fontSize: 11, color: Color(0xFF888888))),
-                const SizedBox(height: 4),
-                // Star rating (empty)
-                Row(
-                  children: List.generate(
-                    5,
-                    (i) => const Icon(Icons.star_border,
-                        size: 12, color: Color(0xFFCCCCCC)),
-                  ),
-                ),
-              ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(doctor.name,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
+                  Text(doctor.specialization,
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF888888))),
+                  if (doctor.hospital != null && doctor.hospital!.isNotEmpty)
+                    Text(doctor.hospital!,
+                        style: const TextStyle(fontSize: 11, color: Color(0xFF2B3EE6))),
+                ],
+              ),
             ),
-          ),
-          // Call button
-          ElevatedButton.icon(
-            onPressed: () {},
-            icon: const Icon(Icons.phone, size: 13),
-            label: const Text('Call',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2B3EE6),
-              foregroundColor: Colors.white,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              minimumSize: Size.zero,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-              elevation: 0,
+            const Icon(Icons.chevron_right, color: Color(0xFFAAAAAA), size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Top Hospitals List ──
+class _TopHospitalsList extends StatefulWidget {
+  const _TopHospitalsList();
+
+  @override
+  State<_TopHospitalsList> createState() => _TopHospitalsListState();
+}
+
+class _TopHospitalsListState extends State<_TopHospitalsList> {
+  List<HospitalModel> _hospitals = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  Future<void> _fetch() async {
+    try {
+      final res = await ApiClient.dio.get('/hospitals');
+      final list = (res.data as List).map((h) => HospitalModel.fromJson(h as Map<String, dynamic>)).toList();
+      if (mounted) setState(() { _hospitals = list.take(3).toList(); _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_hospitals.isEmpty) return const SizedBox.shrink();
+    return Column(
+      children: _hospitals.map((h) => _HospitalTile(hospital: h)).toList(),
+    );
+  }
+}
+
+class _HospitalTile extends StatelessWidget {
+  final HospitalModel hospital;
+  const _HospitalTile({required this.hospital});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => HospitalsScreen())),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6, offset: const Offset(0, 2))
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                color: const Color(0xFFEEF0FF),
+              ),
+              child: hospital.logoUrl != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(hospital.logoUrl!, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(Icons.local_hospital, color: Color(0xFF2B3EE6), size: 28)))
+                  : const Icon(Icons.local_hospital, color: Color(0xFF2B3EE6), size: 28),
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(hospital.name,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
+                  Text(hospital.address,
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF888888)),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Color(0xFFAAAAAA), size: 20),
+          ],
+        ),
       ),
     );
   }
